@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#8a4b2a">
+<title>Noveu</title>
+<style>
+:root{--bg:#faf7f2;--fg:#2a2520;--mu:#7a7168;--card:#fff;--ac:#8a4b2a;--bd:#e6dfd5;color-scheme:light;box-sizing:border-box;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
+:root[data-theme=dark]{--bg:#14120f;--fg:#e8e2d9;--mu:#9a9084;--card:#1e1b17;--ac:#d99a6c;--bd:#322d27;color-scheme:dark}
+*{box-sizing:inherit}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.5 system-ui,-apple-system,Segoe UI,sans-serif}
+a{color:var(--ac)}
+small,.mu{color:var(--mu)}
+.err{color:#c0392b}
+input,button,.btn{font:inherit;color:var(--fg);background:var(--card);border:1px solid var(--bd);border-radius:8px;padding:.45rem .8rem}
+button,.btn{cursor:pointer;text-decoration:none;display:inline-block}
+.btn{background:var(--ac);border-color:var(--ac);color:#fff}
+.top{display:flex;gap:.6rem;align-items:center;padding:.7rem 1rem;position:sticky;top:0;background:var(--bg);border-bottom:1px solid var(--bd);z-index:5}
+.top h1{font-size:1.2rem;margin:0;color:var(--ac)}
+.top input{flex:1;min-width:0}
+.sp{flex:1}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:1rem;padding:1rem}
+.card{display:flex;flex-direction:column;gap:.3rem;text-decoration:none;color:var(--fg)}
+.cv{aspect-ratio:2/3;background:var(--card);border:1px solid var(--bd);border-radius:10px;overflow:hidden;display:grid;place-items:center;font-size:2.5rem;color:var(--ac)}
+.cv img{width:100%;height:100%;object-fit:cover}
+.wrap{max-width:820px;margin:0 auto;padding:1rem}
+.hero{display:grid;grid-template-columns:140px 1fr;gap:1rem}
+.hero h2{margin:.2rem 0}
+.list{list-style:none;padding:0;margin:1rem 0}
+.list li{display:flex;justify-content:space-between;gap:1rem;padding:.55rem 0;border-bottom:1px solid var(--bd)}
+.rd{max-width:680px;margin:0 auto;padding:1.2rem 1rem;line-height:1.75;font-family:Georgia,serif}
+.rd p{white-space:pre-line;margin:0 0 1em}
+.nav,.tools{display:flex;justify-content:space-between;gap:.6rem;max-width:680px;margin:0 auto;padding:1rem;align-items:center}
+.tools{justify-content:center}
+.box{max-width:420px;margin:15vh auto;padding:1rem;display:grid;gap:.8rem}
+@media(max-width:520px){.hero{grid-template-columns:100px 1fr}}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+const CFG={owner:'aLrriane',repo:'noveu-data',base:'library'};
+const $=s=>document.querySelector(s),app=$('#app');
+const LS={get(k,d){try{const v=localStorage.getItem(k);return v===null?d:JSON.parse(v)}catch{return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch{}}};
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const pad=n=>String(n).padStart(4,'0');
+let token=LS.get('noveu.token',''),cache=new Map();
+document.documentElement.dataset.theme=LS.get('noveu.theme',matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light');
+
+async function gh(path,blob){
+  const k=path+(blob?'#b':'');
+  if(cache.has(k))return cache.get(k);
+  const r=await fetch(`https://api.github.com/repos/${CFG.owner}/${CFG.repo}/contents/${CFG.base}/${path}`,{headers:{Authorization:'Bearer '+token,Accept:'application/vnd.github.raw+json'}});
+  if(r.status===401)throw new Error('auth');
+  if(!r.ok)throw new Error(`HTTP ${r.status} on ${path}`);
+  const v=blob?URL.createObjectURL(await r.blob()):path.endsWith('.json')?await r.json():await r.text();
+  cache.set(k,v);return v;
+}
+function save(name,text){
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([text],{type:'text/plain'}));
+  a.download=name.replace(/[\\/:*?"<>|]/g,'_');
+  a.click();
+}
+const head=left=>`<header class="top">${left}<span class="sp"></span><button id="th" title="Light/dark">◐</button><button id="so">Sign out</button></header>`;
+function bind(){
+  $('#th').onclick=()=>{const t=document.documentElement.dataset.theme==='dark'?'light':'dark';document.documentElement.dataset.theme=t;LS.set('noveu.theme',t)};
+  $('#so').onclick=()=>{token='';LS.set('noveu.token','');cache.clear();login()};
+}
+function covers(list){
+  document.querySelectorAll('.cv').forEach(el=>{
+    const n=list.find(x=>x.id==el.dataset.id);
+    if(!n||!n.cover)return;
+    const im=new Image();im.alt='';im.referrerPolicy='no-referrer';
+    im.onload=()=>{el.innerHTML='';el.append(im)};
+    if(/^https?:/.test(n.cover))im.src=n.cover;else gh(n.cover,true).then(u=>{im.src=u}).catch(()=>{});
+  });
+}
+function login(msg){
+  app.innerHTML=`<main class="box"><h1>Noveu</h1><p class="mu">Paste your GitHub token once. It stays on this device only.</p><input id="t" type="password" placeholder="github_pat_…" autocomplete="off"><button id="go" class="btn">Open library</button><p class="err">${esc(msg)}</p></main>`;
+  $('#go').onclick=()=>{token=$('#t').value.trim();LS.set('noveu.token',token);cache.clear();route()};
+}
+
+async function home(){
+  const {novels}=await gh('novels.json'),P=LS.get('noveu.pos',{});
+  app.innerHTML=head('<h1>Noveu</h1><input id="q" type="search" placeholder="Search title or author">')+'<div class="grid" id="g"></div>';
+  bind();
+  const draw=f=>{
+    $('#g').innerHTML=novels.filter(n=>(n.title+' '+n.author).toLowerCase().includes(f)).map(n=>`<a class="card" href="#/novel/${n.id}"><div class="cv" data-id="${n.id}"><span>${esc(n.title[0])}</span></div><b>${esc(n.title)}</b><small>${esc(n.author)} · ${n.chapters?n.chapters+' chapters':'no chapters yet'}${P[n.id]?' · in progress':''}</small></a>`).join('')||'<p class="mu">Nothing found.</p>';
+    covers(novels);
+  };
+  $('#q').oninput=e=>draw(e.target.value.toLowerCase());
+  draw('');
+}
+
+async function novelPage(id){
+  const {novels}=await gh('novels.json'),n=novels.find(x=>x.id===id);
+  if(!n){location.hash='#/';return}
+  const idx=n.chapters?await gh(`chapters/${id}/index.json`):[],last=LS.get('noveu.pos',{})[id],cur=idx.find(c=>c.n===last)||idx[0];
+  app.innerHTML=head('<a href="#/">← Library</a>')+`<main class="wrap"><div class="hero"><div class="cv" data-id="${id}"><span>${esc(n.title[0])}</span></div><div><h2>${esc(n.title)}</h2><p class="mu">${esc(n.author)} · ${esc(n.status)}</p><p class="mu">${esc((n.genres||[]).join(', '))}</p><p>${esc(n.description)}</p>${n.credit?`<p class="mu">${esc(n.credit)}</p>`:''}${idx.length?`<p><a class="btn" href="#/read/${id}/${cur.n}">${last?'Continue':'Start'}: ${esc(cur.title)}</a></p><p><button id="dn">Download all (.txt)</button> <span id="pg" class="mu"></span></p>`:'<p class="mu">No chapters yet.</p>'}</div></div>${idx.length?'<input id="f" placeholder="Filter chapters" style="width:100%;margin-top:1rem"><ol class="list" id="cl"></ol>':''}</main>`;
+  bind();covers([n]);
+  if(!idx.length)return;
+  const draw=f=>{$('#cl').innerHTML=idx.filter(c=>c.title.toLowerCase().includes(f)).map(c=>`<li><a href="#/read/${id}/${c.n}">${esc(c.title)}</a><small>${c.words} words</small></li>`).join('')};
+  $('#f').oninput=e=>draw(e.target.value.toLowerCase());draw('');
+  $('#dn').onclick=async()=>{
+    const out={},q=[...idx];let done=0;
+    const w=async()=>{while(q.length){const c=q.shift();out[c.n]=c.title+'\n\n'+await gh(`chapters/${id}/${pad(c.n)}.txt`);$('#pg').textContent=`${++done}/${idx.length}`}};
+    try{await Promise.all([w(),w(),w(),w(),w(),w()]);save(n.title+'.txt',idx.map(c=>out[c.n]).join('\n\n\n'))}
+    catch(e){$('#pg').textContent='Download failed: '+e.message}
+  };
+}
+
+async function reader(id,n){
+  const {novels}=await gh('novels.json'),nv=novels.find(x=>x.id===id),idx=await gh(`chapters/${id}/index.json`),i=idx.findIndex(c=>c.n===n);
+  if(i<0){location.hash='#/novel/'+id;return}
+  const c=idx[i],txt=await gh(`chapters/${id}/${pad(n)}.txt`);let fs=LS.get('noveu.fs',19);
+  const P=LS.get('noveu.pos',{});P[id]=n;LS.set('noveu.pos',P);
+  const pv=idx[i-1],nx=idx[i+1];
+  const nav=`<nav class="nav">${pv?`<a class="btn" href="#/read/${id}/${pv.n}">← Prev</a>`:'<span></span>'}<a href="#/novel/${id}">Chapters</a>${nx?`<a class="btn" href="#/read/${id}/${nx.n}">Next →</a>`:'<span></span>'}</nav>`;
+  app.innerHTML=head(`<a href="#/novel/${id}">← ${esc(nv.title)}</a>`)+`<article class="rd" id="rd" style="font-size:${fs}px"><h2>${esc(c.title)}</h2>${txt.split(/\n{2,}/).map(p=>`<p>${esc(p)}</p>`).join('')}</article><div class="tools"><button id="fm">A−</button><button id="fp">A+</button><button id="dc">Download chapter</button></div>${nav}`;
+  bind();scrollTo(0,0);
+  const sz=d=>{fs=Math.min(32,Math.max(14,fs+d));LS.set('noveu.fs',fs);$('#rd').style.fontSize=fs+'px'};
+  $('#fm').onclick=()=>sz(-1);$('#fp').onclick=()=>sz(1);
+  $('#dc').onclick=()=>save(c.title+'.txt',c.title+'\n\n'+txt);
+  if(nx)gh(`chapters/${id}/${pad(nx.n)}.txt`).catch(()=>{});
+  window.onkeydown=e=>{
+    if(/INPUT|TEXTAREA/.test(e.target.tagName))return;
+    if(e.key==='ArrowRight'&&nx)location.hash=`#/read/${id}/${nx.n}`;
+    if(e.key==='ArrowLeft'&&pv)location.hash=`#/read/${id}/${pv.n}`;
+  };
+}
+
+async function route(){
+  window.onkeydown=null;
+  if(!token)return login();
+  const h=location.hash.slice(2).split('/');
+  app.innerHTML='<p class="mu" style="padding:1rem">Loading…</p>';
+  try{
+    if(h[0]==='novel')await novelPage(+h[1]);
+    else if(h[0]==='read')await reader(+h[1],+h[2]);
+    else await home();
+  }catch(e){
+    if(e.message==='auth'){token='';LS.set('noveu.token','');login('That token didn’t work. Check it and try again.')}
+    else if(/^HTTP (403|404) on novels\.json/.test(e.message))login(`GitHub answered “${e.message.slice(5,8)}” for ${CFG.owner}/${CFG.repo}/${CFG.base}/novels.json. Either the token doesn’t include the ${CFG.repo} repo with Contents access, or the library folder isn’t in that repo yet.`);
+    else app.innerHTML=`<main class="box"><p class="err">Couldn’t load: ${esc(e.message)}</p><a href="#/">Back to library</a></main>`;
+  }
+}
+addEventListener('hashchange',route);
+route();
+</script>
+</body>
+</html>
